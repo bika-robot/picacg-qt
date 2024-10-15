@@ -48,7 +48,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.PACKAGENAME }}
-        path: dist
+        path: ${{ env.PACKAGENAME }}
         retention-days: 7
 
   macos:
@@ -78,5 +78,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.PACKAGENAME }}
-        path: dist
+        path: ${{ env.PACKAGENAME }}
         retention-days: 7
