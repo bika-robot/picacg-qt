@@ -24,197 +24,45 @@ jobs:
     needs: [setup]
     runs-on: ubuntu-20.04
     env:
-      PACKAGENAME: ${{ needs.setup.outputs.APPNAME }}-${{ needs.setup.outputs.VERSION }}-ubuntu
+      PACKAGENAME: waifu2x_vulkan_ubuntu_x86_64
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v2
       with:
         submodules: 'recursive'
     - name: Set up Python 3.7
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v2
       with:
         python-version: 3.7
-    - name: cache-vulkansdk
-      id: cache-vulkansdk
-      uses: actions/cache@v1
-      with:
-        path: "1.2.198.1"
-        key: vulkansdk-linux-x86_64-1.2.198.1
-    - name: vulkansdk
-      if: steps.cache-vulkansdk.outputs.cache-hit != 'true'
+    - name: Build
       run: |
-        wget https://sdk.lunarg.com/sdk/download/1.2.198.1/linux/vulkansdk-linux-x86_64-1.2.198.1.tar.gz -O vulkansdk-linux-x86_64-1.2.198.1.tar.gz
-        tar -xf vulkansdk-linux-x86_64-1.2.198.1.tar.gz
-        rm -rf 1.2.198.1/source 1.2.198.1/samples
-        find 1.2.198.1 -type f | grep -v -E 'vulkan|glslang' | xargs rm
-    - name: build
-      run: |
-        export VULKAN_SDK=`pwd`/1.2.198.1/x86_64
-        wget https://github.com/tonquer/waifu2x-vulkan/releases/download/v1.1.6/sr-ncnn-vulkan-1.2.0.tar.gz
-        tar -zxvf sr-ncnn-vulkan-1.2.0.tar.gz
-        cd sr-ncnn-vulkan-1.2.0
-        mkdir build && cd build
-        if [ ! -n "$PYTHON_BIN" ]; then
-          PYTHON_BIN=`which python3`
-        fi
-        PYTHON_DIR=`dirname $PYTHON_BIN`/../
-
-        VERSION=`${PYTHON_BIN} -V 2>&1 | cut -d " " -f 2`
-        VERSION_INFO=${VERSION:0:3}
-
-        PYTHON_LIBRARIES=`find $PYTHON_DIR -name "libpython${VERSION_INFO}*.a"|tail -1`
-        PYTHON_INCLUDE=`find $PYTHON_DIR -name "Python.h"|tail -1`
-        PYTHON_INCLUDE_DIRS=`dirname $PYTHON_INCLUDE`
-
-        echo $VERSION
-        echo $PYTHON_BIN
-        echo $PYTHON_LIBRARIES
-        echo $PYTHON_INCLUDE_DIRS
-        cmake ../src -DCMAKE_BUILD_TYPE=Release -DDCMAKE_VERBOSE_MAKEFILE=On -DNCNN_VULKAN=ON -DNCNN_BUILD_TOOLS=OFF -DNCNN_BUILD_EXAMPLES=OFF -DPYTHON_LIBRARIES=$PYTHON_LIBRARIES -DPYTHON_INCLUDE_DIRS=$PYTHON_INCLUDE_DIRS 
-        cmake --build . -j 2
-    - name: package
-      run: |
-        mkdir -p ${{ env.PACKAGENAME }}
-        cp README.md LICENSE ${{ env.PACKAGENAME }}
-        cp build/${{ needs.setup.outputs.APPNAME }} ${{ env.PACKAGENAME }}
-        strip -g ${{ env.PACKAGENAME }}/${{ needs.setup.outputs.APPNAME }}
-        cp -r models/* ${{ env.PACKAGENAME }}
-        zip -9 -r ${{ env.PACKAGENAME }}.zip ${{ env.PACKAGENAME }}
-    - name: upload
+        pip3 install wheel
+        python3 setup.py bdist_wheel
+    - name: Upload
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.PACKAGENAME }}
-        path: ${{ env.PACKAGENAME }}.zip
-
-  openmp-macos:
-    runs-on: macos-13
-    steps:
-    - name: cache-openmp
-      id: cache-openmp
-      uses: actions/cache@v1
-      with:
-        path: openmp-install
-        key: openmp-macos-release-11.0.0
-    - name: checkout
-      if: steps.cache-openmp.outputs.cache-hit != 'true'
-      uses: actions/checkout@v4
-    - name: openmp
-      if: steps.cache-openmp.outputs.cache-hit != 'true'
-      run: |
-        wget https://github.com/llvm/llvm-project/releases/download/llvmorg-11.0.0/openmp-11.0.0.src.tar.xz
-        tar -xf openmp-11.0.0.src.tar.xz
-        cd openmp-11.0.0.src
-        sed -i'' -e '/.size __kmp_unnamed_critical_addr/d' runtime/src/z_Linux_asm.S
-        sed -i'' -e 's/__kmp_unnamed_critical_addr/___kmp_unnamed_critical_addr/g' runtime/src/z_Linux_asm.S
-    - name: build-x86_64
-      if: steps.cache-openmp.outputs.cache-hit != 'true'
-      run: |
-        cd openmp-11.0.0.src
-        mkdir build-x86_64 && cd build-x86_64
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install -DCMAKE_OSX_ARCHITECTURES="x86_64" \
-            -DLIBOMP_ENABLE_SHARED=OFF -DLIBOMP_OMPT_SUPPORT=OFF -DLIBOMP_USE_HWLOC=OFF ..
-        cmake --build . -j 3
-        cmake --build . --target install
-    - name: build-arm64
-      if: steps.cache-openmp.outputs.cache-hit != 'true'
-      run: |
-        cd openmp-11.0.0.src
-        mkdir build-arm64 && cd build-arm64
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install -DCMAKE_OSX_ARCHITECTURES="arm64" \
-            -DLIBOMP_ENABLE_SHARED=OFF -DLIBOMP_OMPT_SUPPORT=OFF -DLIBOMP_USE_HWLOC=OFF ..
-        cmake --build . -j 3
-        cmake --build . --target install
-    - name: merge-fat-library
-      if: steps.cache-openmp.outputs.cache-hit != 'true'
-      run: |
-        rm -rf $GITHUB_WORKSPACE/openmp-install
-        mkdir -p $GITHUB_WORKSPACE/openmp-install
-        cp -r openmp-11.0.0.src/build-x86_64/install/include $GITHUB_WORKSPACE/openmp-install
-        mkdir -p $GITHUB_WORKSPACE/openmp-install/lib
-        lipo -create openmp-11.0.0.src/build-x86_64/install/lib/libomp.a openmp-11.0.0.src/build-arm64/install/lib/libomp.a -o $GITHUB_WORKSPACE/openmp-install/lib/libomp.a
-    - name: upload
-      uses: actions/upload-artifact@v4
-      with:
-        name: openmp-macos
-        path: openmp-install
+        path: dist
+        retention-days: 7
 
   macos:
-    needs: [setup, openmp-macos]
-    runs-on: macos-13
+    runs-on: macos-latest
     env:
-      PACKAGENAME: ${{ needs.setup.outputs.APPNAME }}-${{ needs.setup.outputs.VERSION }}-macos
+      PACKAGENAME: waifu2x_vulkan_macos_x86_64
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v2
       with:
         submodules: 'recursive'
-    - name: download-openmp-macos
-      uses: actions/download-artifact@v4
-      with:
-        name: openmp-macos
-        path: openmp-macos
     - name: Set up Python 3.7
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v2
       with:
         python-version: 3.7
-    - name: install-openmp
+    - name: Build
       run: |
-        sudo cp openmp-macos/include/* $DEVELOPER_DIR/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include
-        sudo cp openmp-macos/lib/libomp.a $DEVELOPER_DIR/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib
-    - name: cache-vulkansdk
-      id: cache-vulkansdk
-      uses: actions/cache@v1
-      with:
-        path: "vulkansdk-macos-1.2.198.1"
-        key: vulkansdk-macos-1.2.198.1
-    - name: vulkansdk
-      if: steps.cache-vulkansdk.outputs.cache-hit != 'true'
-      run: |
-        wget https://sdk.lunarg.com/sdk/download/1.2.198.1/mac/vulkansdk-macos-1.2.198.1.dmg?Human=true -O vulkansdk-macos-1.2.198.1.dmg
-        hdiutil attach vulkansdk-macos-1.2.198.1.dmg
-        cp -r /Volumes/vulkansdk-macos-1.2.198.1 .
-        rm -rf vulkansdk-macos-1.2.198.1/Applications
-        find vulkansdk-macos-1.2.198.1 -type f | grep -v -E 'vulkan|glslang|MoltenVK' | xargs rm
-        hdiutil detach /Volumes/vulkansdk-macos-1.2.198.1
-    - name: build-x86_64
-      run: |
-        export VULKAN_SDK=`pwd`/vulkansdk-macos-1.2.198.1/macOS
-        wget https://github.com/tonquer/waifu2x-vulkan/releases/download/v1.1.6/sr-ncnn-vulkan-1.2.0.tar.gz
-        tar -zxvf sr-ncnn-vulkan-1.2.0.tar.gz
-        cd sr-ncnn-vulkan-1.2.0
-
-        mkdir build-x86_64 && cd build-x86_64
-        cmake -DCMAKE_BUILD_TYPE=Release -DUSE_STATIC_MOLTENVK=ON -DCMAKE_OSX_ARCHITECTURES="x86_64" \
-            -DOpenMP_C_FLAGS="-Xclang -fopenmp" -DOpenMP_CXX_FLAGS="-Xclang -fopenmp" \
-            -DOpenMP_C_LIB_NAMES="libomp" -DOpenMP_CXX_LIB_NAMES="libomp" \
-            -DOpenMP_libomp_LIBRARY="$DEVELOPER_DIR/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libomp.a" \
-            -DVulkan_INCLUDE_DIR=`pwd`/../../vulkansdk-macos-1.2.198.1/MoltenVK/include \
-            -DVulkan_LIBRARY=`pwd`/../../vulkansdk-macos-1.2.198.1/MoltenVK/MoltenVK.xcframework/macos-arm64_x86_64/libMoltenVK.a \
-            ../src
-        cmake --build . -j 3
-    - name: build-arm64
-      run: |
-        cd ..
-        export VULKAN_SDK=`pwd`/vulkansdk-macos-1.2.198.1/macOS
-        cd sr-ncnn-vulkan-1.2.0
-        mkdir build-arm64 && cd build-arm64
-        cmake -DCMAKE_BUILD_TYPE=Release -DUSE_STATIC_MOLTENVK=ON -DCMAKE_OSX_ARCHITECTURES="arm64" \
-            -DCMAKE_CROSSCOMPILING=ON -DCMAKE_SYSTEM_PROCESSOR=arm64 \
-            -DOpenMP_C_FLAGS="-Xclang -fopenmp" -DOpenMP_CXX_FLAGS="-Xclang -fopenmp" \
-            -DOpenMP_C_LIB_NAMES="libomp" -DOpenMP_CXX_LIB_NAMES="libomp" \
-            -DOpenMP_libomp_LIBRARY="$DEVELOPER_DIR/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libomp.a" \
-            -DVulkan_INCLUDE_DIR=`pwd`/../../vulkansdk-macos-1.2.198.1/MoltenVK/include \
-            -DVulkan_LIBRARY=`pwd`/../../vulkansdk-macos-1.2.198.1/MoltenVK/MoltenVK.xcframework/macos-arm64_x86_64/libMoltenVK.a \
-            ../src
-        cmake --build . -j 3
-    - name: package
-      run: |
-        mkdir -p ${{ env.PACKAGENAME }}
-        cp README.md LICENSE ${{ env.PACKAGENAME }}
-        lipo -create build-x86_64/${{ needs.setup.outputs.APPNAME }} build-arm64/${{ needs.setup.outputs.APPNAME }} -o ${{ env.PACKAGENAME }}/${{ needs.setup.outputs.APPNAME }}
-        strip ${{ env.PACKAGENAME }}/${{ needs.setup.outputs.APPNAME }}
-        cp -r models/* ${{ env.PACKAGENAME }}
-        zip -9 -r ${{ env.PACKAGENAME }}.zip ${{ env.PACKAGENAME }}
-    - name: upload
+        pip3 install wheel
+        python3 setup.py bdist_wheel
+    - name: Upload
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.PACKAGENAME }}
-        path: ${{ env.PACKAGENAME }}.zip
+        path: dist
+        retention-days: 7
