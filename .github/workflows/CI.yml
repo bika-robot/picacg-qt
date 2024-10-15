@@ -53,7 +53,23 @@ jobs:
         tar -zxvf sr-ncnn-vulkan-1.2.0.tar.gz
         cd sr-ncnn-vulkan-1.2.0
         mkdir build && cd build
-        cmake ../src
+        if [ ! -n "$PYTHON_BIN" ]; then
+          PYTHON_BIN=`which python3`
+        fi
+        PYTHON_DIR=`dirname $PYTHON_BIN`/../
+
+        VERSION=`${PYTHON_BIN} -V 2>&1 | cut -d " " -f 2`
+        VERSION_INFO=${VERSION:0:3}
+
+        PYTHON_LIBRARIES=`find $PYTHON_DIR -name "libpython${VERSION_INFO}*.a"|tail -1`
+        PYTHON_INCLUDE=`find $PYTHON_DIR -name "Python.h"|tail -1`
+        PYTHON_INCLUDE_DIRS=`dirname $PYTHON_INCLUDE`
+
+        echo $VERSION
+        echo $PYTHON_BIN
+        echo $PYTHON_LIBRARIES
+        echo $PYTHON_INCLUDE_DIRS
+        cmake ../src -DCMAKE_BUILD_TYPE=Release -DDCMAKE_VERBOSE_MAKEFILE=On -DNCNN_VULKAN=ON -DNCNN_BUILD_TOOLS=OFF -DNCNN_BUILD_EXAMPLES=OFF -DPYTHON_LIBRARIES=$PYTHON_LIBRARIES DPYTHON_INCLUDE_DIRS=$PYTHON_INCLUDE_DIRS 
         cmake --build . -j 2
     - name: package
       run: |
@@ -160,12 +176,13 @@ jobs:
         hdiutil detach /Volumes/vulkansdk-macos-1.2.198.1
     - name: build-x86_64
       run: |
+        wget https://github.com/tonquer/waifu2x-vulkan/releases/download/v1.1.6/sr-ncnn-vulkan-1.2.0.tar.gz
         tar -zxvf sr-ncnn-vulkan-1.2.0.tar.gz
         cd sr-ncnn-vulkan-1.2.0
         export VULKAN_SDK=`pwd`/vulkansdk-macos-1.2.198.1/macOS
-        wget https://github.com/tonquer/waifu2x-vulkan/releases/download/v1.1.6/sr-ncnn-vulkan-1.2.0.tar.gz
+
         mkdir build-x86_64 && cd build-x86_64
-        cmake -DUSE_STATIC_MOLTENVK=ON -DCMAKE_OSX_ARCHITECTURES="x86_64" \
+        cmake -DCMAKE_BUILD_TYPE=Release -DUSE_STATIC_MOLTENVK=ON -DCMAKE_OSX_ARCHITECTURES="x86_64" \
             -DOpenMP_C_FLAGS="-Xclang -fopenmp" -DOpenMP_CXX_FLAGS="-Xclang -fopenmp" \
             -DOpenMP_C_LIB_NAMES="libomp" -DOpenMP_CXX_LIB_NAMES="libomp" \
             -DOpenMP_libomp_LIBRARY="$DEVELOPER_DIR/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libomp.a" \
@@ -177,7 +194,7 @@ jobs:
       run: |
         export VULKAN_SDK=`pwd`/vulkansdk-macos-1.2.198.1/macOS
         mkdir build-arm64 && cd build-arm64
-        cmake -DUSE_STATIC_MOLTENVK=ON -DCMAKE_OSX_ARCHITECTURES="arm64" \
+        cmake -DCMAKE_BUILD_TYPE=Release -DUSE_STATIC_MOLTENVK=ON -DCMAKE_OSX_ARCHITECTURES="arm64" \
             -DCMAKE_CROSSCOMPILING=ON -DCMAKE_SYSTEM_PROCESSOR=arm64 \
             -DOpenMP_C_FLAGS="-Xclang -fopenmp" -DOpenMP_CXX_FLAGS="-Xclang -fopenmp" \
             -DOpenMP_C_LIB_NAMES="libomp" -DOpenMP_CXX_LIB_NAMES="libomp" \
