@@ -35,8 +35,15 @@ jobs:
         python-version: 3.7
     - name: Build
       run: |
+        mkdir -p ${{ env.PACKAGENAME }}
+        wget https://github.com/tonquer/waifu2x-vulkan/releases/download/v1.1.6/sr-ncnn-vulkan-1.2.0.tar.gz
+        tar -zxvf sr-ncnn-vulkan-1.2.0.tar.gz
+        cd sr-ncnn-vulkan-1.2.0
         pip3 install wheel
         python3 setup.py bdist_wheel
+        cd ..
+        cp -r sr-ncnn-vulkan-1.2.0/dist/* ${{ env.PACKAGENAME }}
+        zip -9 -r ${{ env.PACKAGENAME }}.zip ${{ env.PACKAGENAME }}
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
@@ -45,7 +52,7 @@ jobs:
         retention-days: 7
 
   macos:
-    runs-on: macos-latest
+    runs-on: macos-13
     env:
       PACKAGENAME: waifu2x_vulkan_macos_x86_64
     steps:
@@ -58,8 +65,15 @@ jobs:
         python-version: 3.7
     - name: Build
       run: |
+        mkdir -p ${{ env.PACKAGENAME }}
+        wget https://github.com/tonquer/waifu2x-vulkan/releases/download/v1.1.6/sr-ncnn-vulkan-1.2.0.tar.gz
+        tar -zxvf sr-ncnn-vulkan-1.2.0.tar.gz
+        cd sr-ncnn-vulkan-1.2.0
         pip3 install wheel
         python3 setup.py bdist_wheel
+        cd ..
+        cp -r sr-ncnn-vulkan-1.2.0/dist/* ${{ env.PACKAGENAME }}
+        zip -9 -r ${{ env.PACKAGENAME }}.zip ${{ env.PACKAGENAME }}
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
