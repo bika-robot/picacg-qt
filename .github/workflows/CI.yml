@@ -1,16 +1,8 @@
 name: CI
 on: [push, pull_request]
 
-env:
-  DEVELOPER_DIR: /Applications/Xcode_15.2.app/Contents/Developer
-  APPLICATION_NAME: waifu2x-ncnn-vulkan
-
 jobs:
-  macos:
+  build:
     runs-on: macos-arm
-    env:
-      PACKAGENAME: waifu2x_vulkan_macos_x86_64
     steps:
-    - name: Setup Debug Session
-      uses: csexton/debugger-action@master
-
+    - uses: hmarr/debug-action@master
